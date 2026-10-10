@@ -1,0 +1,40 @@
+name: Validate
+
+on:
+  pull_request:
+    paths:
+      - plugins.json
+  push:
+    branches:
+      - main
+    paths:
+      - plugins.json
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check JSON parses
+        run: python3 -c "import json; json.load(open('plugins.json'))"
+
+      - name: Check entry schema
+        run: >
+          python3 -c "
+          import json, re, sys;
+          entries = json.load(open('plugins.json'));
+          assert isinstance(entries, list), 'top level must be a list';
+          names = set();
+          order = [];
+          for e in entries:
+              for key in ('name', 'author', 'repo', 'version', 'updated'):
+                  assert key in e and e[key], f'missing {key} in {e}';
+              assert re.fullmatch(r'[^/]+/[^/]+', e['repo']), f'bad repo in {e}';
+              assert re.fullmatch(r'\d{4}-\d{2}-\d{2}', e['updated']), f'bad date in {e}';
+              assert e['name'] not in names, f'duplicate name {e["name"]}';
+              names.add(e['name']);
+              order.append(e['name']);
+          assert order == sorted(order, key=str.lower), 'keep the list alphabetical';
+          print(f'{len(entries)} entries OK');
+          "
